@@ -16,7 +16,7 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
+    system(cmd);
     return true;
 }
 
@@ -58,7 +58,19 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork failed");
+        exit(1);
+    }else if (pid == 0) {
+        printf("Executing command: %s\n", command[0]);
+        execv(command[0], command);
+    }else{
+        printf("Parent is waiting for child process to complete...\n");
+        int status;
+        wait(&status);
+        printf("Child process completed with status: %d\n", status);
+    }
     va_end(args);
 
     return true;
@@ -92,7 +104,27 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork failed in do_exec_redirect");
+        exit(1);
+    }else if (pid == 0) {
+        printf("Executing command: %s in do_exec_redirect\n", command[0]);
+        int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd == -1) {
+            perror("Failed to open output file");
+            exit(1);
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
 
+        execv(command[0], command);
+    }else{
+        printf("Parent do_exec_redirect is waiting for child process to complete...\n");
+        int status;
+        wait(&status);
+        printf("Child process from do_exec_redirect completed with status: %d\n", status);
+    }
     va_end(args);
 
     return true;
