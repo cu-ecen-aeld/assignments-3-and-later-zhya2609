@@ -1,13 +1,13 @@
-CROSS_COMPILE = aarch64-none-linux-gnu-gcc
+#CROSS_COMPILE = aarch64-none-linux-gnu-gcc
+CC=gcc
 TARGET = writer
 SRC = writer.c
 
-all: $(TARGET)
-$(TARGET): $(SRC)
-# 	$(CROSS_COMPILE) $(SRC) -o $(TARGET)
-	gcc $(SRC) -o $(TARGET)
+all: 
+	$(CROSS_COMPILE)$(CC) $(SRC) -o $(TARGET)
+#	gcc $(SRC) -o $(TARGET)
 
 clean:
-	rm -f /home/zhya/work/finder-app/$(TARGET)
+	rm -f $(TARGET).o $(TARGET)
 
 .PHONY: all clean
