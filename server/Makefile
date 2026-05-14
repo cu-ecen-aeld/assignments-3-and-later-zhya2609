@@ -10,7 +10,7 @@ all: $(TARGET)
 default: $(TARGET)
 
 $(TARGET): $(SRC)
-	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
+	$(CC) $(CFLAGS) $(SRC) -o $(TARGET) -lpthread -lrt
 
 clean:
 	rm -f $(TARGET) *.o
