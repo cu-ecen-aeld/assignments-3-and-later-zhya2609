@@ -11,7 +11,7 @@ default: $(TARGET)
 
 $(TARGET): $(SRC)
 # 	$(CC) $(CFLAGS) $(SRC) -o $(TARGET) -lpthread -lrt
-    $(CC) $(CFLAGS) $(LDFLAGS) $(SRC) -o $(TARGET) -lpthread -lrt
+	$(CC) $(CFLAGS) $(LDFLAGS) $(SRC) -o $(TARGET) -lpthread -lrt
 
 clean:
 	rm -f $(TARGET) *.o
