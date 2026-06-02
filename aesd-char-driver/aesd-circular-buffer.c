@@ -36,7 +36,6 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         return NULL;
     }
 
-
     uint8_t num_entries;
     if (buffer->full) {
         num_entries = AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
@@ -67,13 +66,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     return NULL;
 }
 
-/**
-* Adds entry @param add_entry to @param buffer in the location specified in buffer->in_offs.
-* If the buffer was already full, overwrites the oldest entry and advances buffer->out_offs to the
-* new start location.
-* Any necessary locking must be handled by the caller
-* Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
-*/
+
 void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     if (buffer->full) {
@@ -86,9 +79,7 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     }
 }
 
-/**
-* Initializes the circular buffer described by @param buffer to an empty struct
-*/
+
 void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
 {
     memset(buffer,0,sizeof(struct aesd_circular_buffer));
