@@ -29,12 +29,14 @@
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
             size_t char_offset, size_t *entry_offset_byte_rtn )
 {
-    /* If buffer is empty, nothing to find */
+    /**
+    * TODO: implement per description
+    */
     if ((!buffer->full) && (buffer->in_offs == buffer->out_offs)) {
         return NULL;
     }
 
-    /* Determine how many valid entries exist in the buffer */
+
     uint8_t num_entries;
     if (buffer->full) {
         num_entries = AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
@@ -44,7 +46,10 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
                        % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     }
 
-    /* Walk through entries starting from the oldest (out_offs) */
+    /**
+    * TODO: implement per description
+    */
+
     uint8_t index = buffer->out_offs;
     uint8_t count = 0;
     while (count < num_entries) {
@@ -59,7 +64,6 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         count++;
     }
 
-    /* Offset is past the end of all buffered data */
     return NULL;
 }
 
