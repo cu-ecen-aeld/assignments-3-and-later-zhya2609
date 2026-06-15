@@ -11,19 +11,17 @@
 #include <linux/mutex.h>
 #include "aesd-circular-buffer.h"
 
-#define AESD_DEBUG 1  //Remove comment on this line to enable debug
+#define AESD_DEBUG 1
 
-#undef PDEBUG             /* undef it, just in case */
+#undef PDEBUG
 #ifdef AESD_DEBUG
 #  ifdef __KERNEL__
-     /* This one if debugging is on, and kernel space */
-#    define PDEBUG(fmt, args...) printk( KERN_DEBUG "aesdchar: " fmt, ## args)
+#    define PDEBUG(fmt, args...) printk(KERN_DEBUG "aesdchar: " fmt, ## args)
 #  else
-     /* This one for user space */
 #    define PDEBUG(fmt, args...) fprintf(stderr, fmt, ## args)
 #  endif
 #else
-#  define PDEBUG(fmt, args...) /* not debugging: nothing */
+#  define PDEBUG(fmt, args...)
 #endif
 
 struct aesd_dev
@@ -34,6 +32,5 @@ struct aesd_dev
     size_t working_entry_size;
     struct cdev cdev;
 };
-
 
 #endif /* AESD_CHAR_DRIVER_AESDCHAR_H_ */

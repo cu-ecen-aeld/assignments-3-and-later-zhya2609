@@ -14,6 +14,8 @@
 #include <pthread.h>
 #include <sys/queue.h>
 #include <time.h>
+#include <sys/ioctl.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 #define PORT 9000
 #define BUFFER_SIZE 1024
@@ -44,29 +46,28 @@ void signal_handler(int signal_number) {
 void *handle_connection(void *thread_param) {
     slist_data_t *thread_data = (slist_data_t *)thread_param;
     int client_fd = thread_data->client_fd;
-    
+
     size_t total_received = 0;
     size_t buffer_capacity = BUFFER_SIZE;
     char *rx_buffer = malloc(buffer_capacity);
     char *new_buffer;
     ssize_t bytes_received, bytes_read;
     char tx_buffer[BUFFER_SIZE];
-    
+
     if (!rx_buffer) {
         close(client_fd);
         thread_data->thread_complete_flag = true;
         return NULL;
     }
-    
+
     while (1) {
         bytes_received = recv(client_fd, rx_buffer + total_received, buffer_capacity - total_received, 0);
         if (bytes_received <= 0) break;
-        
+
         total_received += bytes_received;
 
-        if (memchr(rx_buffer + total_received - bytes_received, '\n', bytes_received) != NULL) {
-            break; 
-        }
+        if (memchr(rx_buffer + total_received - bytes_received, '\n', bytes_received) != NULL)
+            break;
 
         if (total_received >= buffer_capacity) {
             buffer_capacity += BUFFER_SIZE;
@@ -79,31 +80,47 @@ void *handle_connection(void *thread_param) {
             rx_buffer = new_buffer;
         }
     }
-    
+
     if (rx_buffer) {
         pthread_mutex_lock(&aesd_file_mutex);
 
 #ifdef USE_AESD_CHAR_DEVICE
-        int write_fd = open(FILE_PATH, O_WRONLY);
-        if (write_fd != -1) {
-            write(write_fd, rx_buffer, total_received);
-            close(write_fd);
-        }
-        int read_fd = open(FILE_PATH, O_RDONLY);
-        if (read_fd != -1) {
-            while ((bytes_read = read(read_fd, tx_buffer, BUFFER_SIZE)) > 0) {
-                send(client_fd, tx_buffer, bytes_read, 0);
+        const char *seekto_prefix = "AESDCHAR_IOCSEEKTO:";
+        if (strncmp(rx_buffer, seekto_prefix, strlen(seekto_prefix)) == 0) {
+            struct aesd_seekto seekto;
+            if (sscanf(rx_buffer + strlen(seekto_prefix), "%u,%u",
+                       &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
+                int ioctl_fd = open(FILE_PATH, O_RDWR);
+                if (ioctl_fd != -1) {
+                    if (ioctl(ioctl_fd, AESDCHAR_IOCSEEKTO, &seekto) == 0) {
+                        while ((bytes_read = read(ioctl_fd, tx_buffer, BUFFER_SIZE)) > 0)
+                            send(client_fd, tx_buffer, bytes_read, 0);
+                    } else {
+                        syslog(LOG_ERR, "ioctl AESDCHAR_IOCSEEKTO failed: %d", errno);
+                    }
+                    close(ioctl_fd);
+                }
             }
-            close(read_fd);
+        } else {
+            int write_fd = open(FILE_PATH, O_WRONLY);
+            if (write_fd != -1) {
+                write(write_fd, rx_buffer, total_received);
+                close(write_fd);
+            }
+            int read_fd = open(FILE_PATH, O_RDONLY);
+            if (read_fd != -1) {
+                while ((bytes_read = read(read_fd, tx_buffer, BUFFER_SIZE)) > 0)
+                    send(client_fd, tx_buffer, bytes_read, 0);
+                close(read_fd);
+            }
         }
 #else
         int file_fd = open(FILE_PATH, O_CREAT | O_APPEND | O_RDWR, 0644);
         if (file_fd != -1) {
             if (write(file_fd, rx_buffer, total_received) != -1) {
                 lseek(file_fd, 0, SEEK_SET);
-                while ((bytes_read = read(file_fd, tx_buffer, BUFFER_SIZE)) > 0) {
+                while ((bytes_read = read(file_fd, tx_buffer, BUFFER_SIZE)) > 0)
                     send(client_fd, tx_buffer, bytes_read, 0);
-                }
             }
             close(file_fd);
         }
@@ -130,18 +147,17 @@ void *timestamp_thread_func(void *arg) {
             select(0, NULL, NULL, NULL, &tv);
             ms_waited += 100;
         }
-        
+
         if (caught_signal) break;
-        
+
         time_t t = time(NULL);
         struct tm *tmp = localtime(&t);
         if (tmp == NULL) continue;
-        
+
         char outstr[200];
-        if (strftime(outstr, sizeof(outstr), "timestamp:%a, %d %b %Y %T %z\n", tmp) == 0) {
+        if (strftime(outstr, sizeof(outstr), "timestamp:%a, %d %b %Y %T %z\n", tmp) == 0)
             continue;
-        }
-        
+
         pthread_mutex_lock(&aesd_file_mutex);
         int file_fd = open(FILE_PATH, O_CREAT | O_APPEND | O_RDWR, 0644);
         if (file_fd != -1) {
@@ -163,16 +179,15 @@ int main(int argc, char *argv[]) {
     socklen_t client_addr_size = sizeof(client_addr);
     char client_ip[INET_ADDRSTRLEN];
     pid_t pid;
-    
-    if (argc == 2 && strcmp(argv[1], "-d") == 0) {
+
+    if (argc == 2 && strcmp(argv[1], "-d") == 0)
         daemon_mode = true;
-    }
 
     openlog("aesdsocket", 0, LOG_USER);
 
     memset(&new_action, 0, sizeof(struct sigaction));
     new_action.sa_handler = signal_handler;
-    sigemptyset(&new_action.sa_mask); 
+    sigemptyset(&new_action.sa_mask);
 
     if (sigaction(SIGINT, &new_action, NULL) != 0) {
         syslog(LOG_ERR, "Error %d registering for SIGINT", errno);
@@ -188,14 +203,18 @@ int main(int argc, char *argv[]) {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) { perror("socket"); return -1; }
 
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) { perror("setsockopt"); return -1; }
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
+        perror("setsockopt"); return -1;
+    }
 
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) { perror("bind"); return -1; }
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        perror("bind"); return -1;
+    }
 
     if (daemon_mode) {
         pid = fork();
@@ -204,7 +223,7 @@ int main(int argc, char *argv[]) {
             perror("fork");
             return -1;
         } else if (pid != 0) {
-            exit(EXIT_SUCCESS); 
+            exit(EXIT_SUCCESS);
         }
         if (setsid() == -1) { perror("setsid"); return -1; }
         if (chdir("/") == -1) { perror("chdir"); return -1; }
@@ -221,18 +240,17 @@ int main(int argc, char *argv[]) {
 
     SLIST_HEAD(slisthead, slist_data_s) head;
     SLIST_INIT(&head);
-    
+
 #ifndef USE_AESD_CHAR_DEVICE
     pthread_t timestamp_thread;
-    if (pthread_create(&timestamp_thread, NULL, timestamp_thread_func, NULL) != 0) {
+    if (pthread_create(&timestamp_thread, NULL, timestamp_thread_func, NULL) != 0)
         syslog(LOG_ERR, "Failed to create timestamp thread");
-    }
 #endif
 
     while (!caught_signal) {
         client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_size);
         if (client_fd == -1) {
-            if (caught_signal) break; 
+            if (caught_signal) break;
             continue;
         }
 
@@ -244,7 +262,7 @@ int main(int argc, char *argv[]) {
             new_node->client_fd = client_fd;
             strcpy(new_node->client_ip, client_ip);
             new_node->thread_complete_flag = false;
-            
+
             if (pthread_create(&new_node->thread, NULL, handle_connection, new_node) == 0) {
                 SLIST_INSERT_HEAD(&head, new_node, entries);
             } else {
@@ -269,20 +287,20 @@ int main(int argc, char *argv[]) {
     }
 
     syslog(LOG_INFO, "Caught signal, exiting");
-    
+
 #ifndef USE_AESD_CHAR_DEVICE
     pthread_join(timestamp_thread, NULL);
 #endif
-    
+
     slist_data_t *elem;
     while (!SLIST_EMPTY(&head)) {
         elem = SLIST_FIRST(&head);
-        pthread_cancel(elem->thread); 
+        pthread_cancel(elem->thread);
         pthread_join(elem->thread, NULL);
         SLIST_REMOVE_HEAD(&head, entries);
         free(elem);
     }
-    
+
 #ifndef USE_AESD_CHAR_DEVICE
     remove(FILE_PATH);
 #endif
